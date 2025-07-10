@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D 고양이 수학 게임</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body { margin: 0; background: linear-gradient(135deg, #87CEEB, #98FB98); font-family: 'Arial', sans-serif; overflow: hidden; touch-action: none; }
+        #gameContainer { position: relative; width: 100vw; height: 100vh; cursor: grab; }
+        #gameContainer:active { cursor: grabbing; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; color: white; font-size: clamp(16px, 4vw, 24px); text-shadow: 2px 2px 4px rgba(0,0,0,0.5); max-width: 250px; display: none; }
+        #operationMenu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: rgba(255,255,255,0.95); padding: clamp(20px, 5vw, 40px); border-radius: 25px; text-align: center; box-shadow: 0 15px 40px rgba(0,0,0,0.4); max-width: 90vw; display: block; }
+        .operation-button { background: linear-gradient(45deg, #2196F3, #42A5F5); color: white; border: none; padding: clamp(10px, 3vw, 15px) clamp(20px, 5vw, 30px); margin: clamp(5px, 2vw, 10px); border-radius: 15px; font-size: clamp(16px, 4vw, 22px); font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.2); touch-action: manipulation; min-width: 120px; }
+        .operation-button:hover, .operation-button:active { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+        .operation-button.selected { background: linear-gradient(45deg, #4CAF50, #66BB6A); }
+        #instruction { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; color: white; font-size: clamp(14px, 3.5vw, 18px); text-shadow: 2px 2px 4px rgba(0,0,0,0.5); text-align: center; background: rgba(0,0,0,0.3); padding: 10px 20px; border-radius: 15px; display: none; }
+        .mobile-controls { position: absolute; top: 10px; right: 10px; z-index: 100; display: none; flex-direction: column; gap: 10px; }
+        .control-button { background: linear-gradient(45deg, #2196F3, #42A5F5); color: white; border: none; padding: 15px 20px; border-radius: 15px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.2); touch-action: manipulation; min-width: 140px; }
+        .control-button:active { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .control-button.sound-off { background: linear-gradient(45deg, #666, #888); }
+        #gameComplete { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; background: linear-gradient(135deg, #FFD700, #FFA500); padding: clamp(20px, 6vw, 40px); border-radius: 25px; font-size: clamp(20px, 5vw, 32px); font-weight: bold; color: white; text-align: center; box-shadow: 0 15px 40px rgba(0,0,0,0.4); display: none; max-width: 90vw; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="loading">🐱 게임 로딩 중... 🐱</div>
+        <div id="ui">
+            <div>문제: <span id="problemCount">1</span> / 10</div>
+            <div>점수: <span id="score">0</span></div>
+            <div>고양이 키: <span id="catSize">100%</span></div>
+        </div>
+        <div id="operationMenu">
+            <h2 style="margin-top: 0; color: #333; font-size: clamp(20px, 5vw, 32px);">🐱 고양이 키우기 수학 게임 🐱</h2>
+            <p style="color: #666; font-size: clamp(14px, 3vw, 18px); margin-bottom: 30px;">어떤 연산을 연습하고 싶나요?</p>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 20px;">
+                <button class="operation-button selected" onclick="selectOperation('addition')">➕ 덧셈</button>
+                <button class="operation-button" onclick="selectOperation('subtraction')">➖ 뺄셈</button>
+                <button class="operation-button" onclick="selectOperation('multiplication')">✖️ 곱셈</button>
+                <button class="operation-button" onclick="selectOperation('division')">➗ 나눗셈</button>
+                <button class="operation-button" onclick="selectOperation('mixed')">🔀 혼합</button>
+            </div>
+            <button onclick="startGameWithOperation()" style="background: linear-gradient(45deg, #4CAF50, #66BB6A); color: white; border: none; padding: 15px 30px; border-radius: 15px; font-size: clamp(18px, 4vw, 24px); font-weight: bold; cursor: pointer; margin-top: 10px;">게임 시작!</button>
+        </div>
+        <div id="instruction">
+             <div>↔️ 화면을 드래그하거나 키보드 방향키로 고양이를 움직이세요 ↔️</div>
+        </div>
+        <div class="mobile-controls">
+            <button class="control-button" onclick="toggleSpeed()">
+                <span id="speedText">🚶‍♀️ 속도: x1</span>
+            </button>
+            <button class="control-button" id="bgmButton" onclick="toggleBGM()">
+                <span id="bgmText">🎵 배경음악: ON</span>
+            </button>
+            <button class="control-button" id="sfxButton" onclick="toggleSFX()">
+                <span id="sfxText">🔊 효과음: ON</span>
+            </button>
+        </div>
+        <div id="gameComplete">
+            <div>🎉 축하합니다! 🎉</div>
+            <div>모든 문제를 완료했어요!</div>
+            <div>최종 점수: <span id="finalScore"></span></div>
+            <div>최종 키: <span id="finalCatSize"></span></div>
+            <button onclick="restartGame()" style="margin-top: 20px; padding: 15px 30px; font-size: clamp(16px, 4vw, 20px); background: #4CAF50; color: white; border: none; border-radius: 15px; cursor: pointer; touch-action: manipulation;">다시 시작</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, cat, world;
+        let currentProblem = 0, score = 0;
+        let problems = [];
+        let answerGroups = [];
+        let activeParticles = [];
+        let gameStarted = false;
+        let walkingSpeed = 0.1; 
+        let speedMultiplier = 1;
+        let problemPositions = [];
+        let gameInitialized = false;
+        const INITIAL_CAT_SCALE = 0.4;
+        let currentCatAbsoluteScale = INITIAL_CAT_SCALE; 
+        let questionText, questionCanvas, questionContext;
+        let selectedOperation = 'addition';
+        let catTargetX = 0;
+        let isPointerDown = false;
+        let pointerStartX = 0;
+        let catStartDragX = 0;
+        const LANE_WIDTH = 4;
+        const ROAD_LIMIT = 3.0;
+        const answerColors = ['#E53935', '#43A047', '#1E88E5', '#FFB300', '#8E24AA'];
+
+        let correctSound, wrongSound, bgmSynth, bgmSequence;
+        let isAudioReady = false;
+        
+        // 음향 on/off 상태 변수
+        let isBGMEnabled = true;
+        let isSFXEnabled = true;
+
+        let roadSections = [];
+        let trees = [];
+        const NUM_ROAD_SECTIONS = 30;
+        const ROAD_SECTION_LENGTH = 20;
+        const NUM_TREES = 40;
+        const RECYCLE_DEPTH = NUM_TREES * 15;
+        
+        // 추가 환경 요소
+        let clouds = [];
+        let flowers = [];
+        let butterflies = [];
+        let ambientParticles = [];
+        let catTail, catWhiskers = [];
+        let skyGradient;
+
+        function initAudio() {
+            correctSound = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 } }).toDestination();
+            wrongSound = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.4 } }).toDestination();
+            bgmSynth = new Tone.MembraneSynth().toDestination();
+            bgmSynth.volume.value = -12;
+            bgmSequence = new Tone.Sequence((time, note) => {
+                if (isBGMEnabled) {
+                    bgmSynth.triggerAttackRelease(note, "8n", time);
+                }
+            }, ["C2", ["G2", "D2"], "C2", "G2"], "4n").start(0);
+            Tone.Transport.bpm.value = 100;
+            isAudioReady = true;
+        }
+
+        function toggleBGM() {
+            isBGMEnabled = !isBGMEnabled;
+            const bgmButton = document.getElementById('bgmButton');
+            const bgmText = document.getElementById('bgmText');
+            
+            if (isBGMEnabled) {
+                bgmText.textContent = '🎵 배경음악: ON';
+                bgmButton.classList.remove('sound-off');
+            } else {
+                bgmText.textContent = '🎵 배경음악: OFF';
+                bgmButton.classList.add('sound-off');
+            }
+        }
+
+        function toggleSFX() {
+            isSFXEnabled = !isSFXEnabled;
+            const sfxButton = document.getElementById('sfxButton');
+            const sfxText = document.getElementById('sfxText');
+            
+            if (isSFXEnabled) {
+                sfxText.textContent = '🔊 효과음: ON';
+                sfxButton.classList.remove('sound-off');
+            } else {
+                sfxText.textContent = '🔊 효과음: OFF';
+                sfxButton.classList.add('sound-off');
+            }
+        }
+
+        function initGame() {
+            try {
+                scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0x87CEEB, 100, 300);
+                
+                // 하늘 그라데이션 생성
+                createSkyGradient();
+                
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 5, 12);
+                camera.lookAt(0, 1.5, 0);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 1.2;
+                document.getElementById('gameContainer').appendChild(renderer.domElement);
+                
+                // 조명 설정 개선
+                const ambientLight = new THREE.AmbientLight(0xffefd5, 0.6);
+                scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffd700, 0.8);
+                directionalLight.position.set(10, 20, 5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 500;
+                directionalLight.shadow.camera.left = -50;
+                directionalLight.shadow.camera.right = 50;
+                directionalLight.shadow.camera.top = 50;
+                directionalLight.shadow.camera.bottom = -50;
+                scene.add(directionalLight);
+                
+                // 추가 조명
+                const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x98FB98, 0.3);
+                scene.add(hemisphereLight);
+
+                world = new THREE.Group();
+                scene.add(world);
+                
+                for (let i = 0; i < 10; i++) {
+                    problemPositions.push(120 + i * 100); 
+                }
+                
+                createEnvironment();
+                createCat();
+                createAnswerObjects();
+                createClouds();
+                createAmbientParticles();
+                
+                gameInitialized = true;
+                document.getElementById('loading').style.display = 'none';
+                
+                document.addEventListener('keydown', handleKeyDown);
+                renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+                renderer.domElement.addEventListener('pointermove', handlePointerMove);
+                renderer.domElement.addEventListener('pointerup', handlePointerUp);
+                renderer.domElement.addEventListener('pointerleave', handlePointerUp);
+
+                animate();
+                
+            } catch (error) {
+                console.error("게임 초기화 오류:", error);
+                document.getElementById('loading').textContent = "게임 로딩 실패. 페이지를 새로고침 해주세요.";
+            }
+        }
+        
+        function createSkyGradient() {
+            const skyGeometry = new THREE.SphereGeometry(400, 32, 32);
+            const skyMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x87CEEB) },
+                    bottomColor: { value: new THREE.Color(0xffefd5) },
+                    offset: { value: 33 },
+                    exponent: { value: 0.6 }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    uniform float offset;
+                    uniform float exponent;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize(vWorldPosition + offset).y;
+                        gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                    }
+                `,
+                side: THREE.BackSide
+            });
+            skyGradient = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(skyGradient);
+        }
+        
+        function createClouds() {
+            for (let i = 0; i < 15; i++) {
+                const cloud = createCloud();
+                cloud.position.set(
+                    Math.random() * 200 - 100,
+                    Math.random() * 50 + 30,
+                    Math.random() * 200 - 100
+                );
+                cloud.scale.setScalar(Math.random() * 2 + 1);
+                clouds.push(cloud);
+                scene.add(cloud);
+            }
+        }
+        
+        function createCloud() {
+            const cloudGroup = new THREE.Group();
+            const cloudMaterial = new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.8,
+                depthWrite: false
+            });
+            
+            for (let i = 0; i < 5; i++) {
+                const size = Math.random() * 4 + 2;
+                const cloud = new THREE.Mesh(
+                    new THREE.SphereGeometry(size, 12, 12),
+                    cloudMaterial
+                );
+                cloud.position.set(
+                    Math.random() * 10 - 5,
+                    Math.random() * 3,
+                    Math.random() * 10 - 5
+                );
+                cloudGroup.add(cloud);
+            }
+            
+            return cloudGroup;
+        }
+        
+        function createAmbientParticles() {
+            const particleGeometry = new THREE.BufferGeometry();
+            const particleCount = 200;
+            const positions = [];
+            
+            for (let i = 0; i < particleCount; i++) {
+                positions.push(
+                    Math.random() * 200 - 100,
+                    Math.random() * 50,
+                    Math.random() * 200 - 100
+                );
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.5,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            ambientParticles.push(particles);
+            scene.add(particles);
+        }
+        
+        function handleKeyDown(event) {
+            if (!gameStarted) return;
+            if (event.key === 'ArrowLeft') catTargetX = Math.max(-LANE_WIDTH, catTargetX - LANE_WIDTH);
+            else if (event.key === 'ArrowRight') catTargetX = Math.min(LANE_WIDTH, catTargetX + LANE_WIDTH);
+        }
+
+        function handlePointerDown(event) {
+            if (!gameStarted) return;
+            isPointerDown = true;
+            pointerStartX = event.clientX || event.touches[0].clientX;
+            catStartDragX = cat.position.x;
+        }
+        
+        function handlePointerMove(event) {
+            if (!gameStarted || !isPointerDown) return;
+            const currentX = event.clientX || event.touches[0].clientX;
+            const dragDistance = (currentX - pointerStartX) * 0.05;
+            catTargetX = catStartDragX + dragDistance;
+            catTargetX = Math.max(-ROAD_LIMIT, Math.min(ROAD_LIMIT, catTargetX));
+        }
+
+        function handlePointerUp() {
+            if (!gameStarted) return;
+            isPointerDown = false;
+            catTargetX = Math.round(cat.position.x / LANE_WIDTH) * LANE_WIDTH;
+            catTargetX = Math.max(-LANE_WIDTH, Math.min(LANE_WIDTH, catTargetX));
+        }
+
+        function createEnvironment() {
+            for (let i = 0; i < NUM_ROAD_SECTIONS; i++) {
+                const sectionGroup = new THREE.Group();
+                const zPos = i * ROAD_SECTION_LENGTH - (NUM_ROAD_SECTIONS / 2 * ROAD_SECTION_LENGTH);
+                
+                // 도로 텍스처 생성
+                const roadCanvas = document.createElement('canvas');
+                roadCanvas.width = 512;
+                roadCanvas.height = 512;
+                const roadCtx = roadCanvas.getContext('2d');
+                
+                // 도로 기본 색상
+                roadCtx.fillStyle = '#DEB887';
+                roadCtx.fillRect(0, 0, 512, 512);
+                
+                // 도로 중앙선
+                roadCtx.strokeStyle = '#FFF8DC';
+                roadCtx.lineWidth = 8;
+                roadCtx.setLineDash([40, 20]);
+                roadCtx.beginPath();
+                roadCtx.moveTo(256, 0);
+                roadCtx.lineTo(256, 512);
+                roadCtx.stroke();
+                
+                const roadTexture = new THREE.CanvasTexture(roadCanvas);
+                const roadMaterial = new THREE.MeshLambertMaterial({ map: roadTexture });
+                
+                const roadGeometry = new THREE.PlaneGeometry(12, ROAD_SECTION_LENGTH);
+                const roadSegment = new THREE.Mesh(roadGeometry, roadMaterial);
+                roadSegment.rotation.x = -Math.PI / 2;
+                roadSegment.position.set(0, 0.01, 0);
+                roadSegment.receiveShadow = true;
+                sectionGroup.add(roadSegment);
+                
+                // 잔디 텍스처 생성
+                const grassCanvas = document.createElement('canvas');
+                grassCanvas.width = 256;
+                grassCanvas.height = 256;
+                const grassCtx = grassCanvas.getContext('2d');
+                
+                // 잔디 그라데이션
+                const gradient = grassCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
+                gradient.addColorStop(0, '#90EE90');
+                gradient.addColorStop(1, '#228B22');
+                grassCtx.fillStyle = gradient;
+                grassCtx.fillRect(0, 0, 256, 256);
+                
+                // 잔디 디테일
+                for (let j = 0; j < 100; j++) {
+                    grassCtx.fillStyle = `rgba(34, 139, 34, ${Math.random() * 0.3})`;
+                    grassCtx.beginPath();
+                    grassCtx.arc(Math.random() * 256, Math.random() * 256, Math.random() * 3, 0, Math.PI * 2);
+                    grassCtx.fill();
+                }
+                
+                const grassTexture = new THREE.CanvasTexture(grassCanvas);
+                const grassMaterial = new THREE.MeshLambertMaterial({ map: grassTexture });
+                
+                const leftGrass = new THREE.Mesh(new THREE.PlaneGeometry(40, ROAD_SECTION_LENGTH), grassMaterial);
+                leftGrass.rotation.x = -Math.PI / 2;
+                leftGrass.position.set(-26, 0, 0);
+                leftGrass.receiveShadow = true;
+                sectionGroup.add(leftGrass);
+                const rightGrass = new THREE.Mesh(new THREE.PlaneGeometry(40, ROAD_SECTION_LENGTH), grassMaterial);
+                rightGrass.rotation.x = -Math.PI / 2;
+                rightGrass.position.set(26, 0, 0);
+                rightGrass.receiveShadow = true;
+                sectionGroup.add(rightGrass);
+                
+                // 꽃 추가
+                if (Math.random() > 0.7) {
+                    for (let k = 0; k < 3; k++) {
+                        const flower = createFlower();
+                        const side = Math.random() > 0.5 ? 1 : -1;
+                        flower.position.set(
+                            side * (8 + Math.random() * 10),
+                            0.3,
+                            Math.random() * ROAD_SECTION_LENGTH - ROAD_SECTION_LENGTH / 2
+                        );
+                        sectionGroup.add(flower);
+                    }
+                }
+                
+                sectionGroup.position.z = zPos;
+                roadSections.push(sectionGroup);
+                world.add(sectionGroup);
+            }
+            
+            for (let i = 0; i < NUM_TREES; i++) {
+                const tree = createDetailedTree();
+                const side = Math.random() > 0.5 ? 1 : -1;
+                tree.position.set(side * (8 + Math.random() * 15), 0, -Math.random() * RECYCLE_DEPTH);
+                trees.push(tree);
+                world.add(tree);
+            }
+            
+            // 나비 추가
+            for (let i = 0; i < 5; i++) {
+                const butterfly = createButterfly();
+                butterfly.position.set(
+                    Math.random() * 40 - 20,
+                    Math.random() * 5 + 2,
+                    Math.random() * 40 - 20
+                );
+                butterflies.push(butterfly);
+                world.add(butterfly);
+            }
+        }
+        
+        function createFlower() {
+            const flowerGroup = new THREE.Group();
+            
+            // 꽃잎
+            const petalColors = [0xFF69B4, 0xFFB6C1, 0xFFA07A, 0xFFFF00, 0xFF1493];
+            const petalColor = petalColors[Math.floor(Math.random() * petalColors.length)];
+            
+            for (let i = 0; i < 5; i++) {
+                const petal = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 8, 8),
+                    new THREE.MeshPhongMaterial({ color: petalColor })
+                );
+                const angle = (i / 5) * Math.PI * 2;
+                petal.position.set(Math.cos(angle) * 0.3, 0, Math.sin(angle) * 0.3);
+                petal.scale.set(1.5, 1, 1);
+                flowerGroup.add(petal);
+            }
+            
+            // 꽃 중심
+            const center = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15, 8, 8),
+                new THREE.MeshPhongMaterial({ color: 0xFFD700 })
+            );
+            center.position.y = 0.1;
+            flowerGroup.add(center);
+            
+            // 줄기
+            const stem = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.05, 1),
+                new THREE.MeshPhongMaterial({ color: 0x228B22 })
+            );
+            stem.position.y = -0.5;
+            flowerGroup.add(stem);
+            
+            return flowerGroup;
+        }
+        
+        function createButterfly() {
+            const butterflyGroup = new THREE.Group();
+            
+            // 날개
+            const wingGeometry = new THREE.PlaneGeometry(0.8, 0.5);
+            const wingMaterial = new THREE.MeshPhongMaterial({
+                color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6),
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            leftWing.position.x = -0.4;
+            leftWing.rotation.y = -Math.PI / 6;
+            butterflyGroup.add(leftWing);
+            
+            const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            rightWing.position.x = 0.4;
+            rightWing.rotation.y = Math.PI / 6;
+            butterflyGroup.add(rightWing);
+            
+            // 몸통
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.05, 0.3),
+                new THREE.MeshPhongMaterial({ color: 0x000000 })
+            );
+            body.rotation.z = Math.PI / 2;
+            butterflyGroup.add(body);
+            
+            butterflyGroup.userData = { 
+                baseY: butterflyGroup.position.y,
+                speed: Math.random() * 2 + 1,
+                range: Math.random() * 20 + 10
+            };
+            
+            return butterflyGroup;
+        }
+        
+        function createDetailedTree() {
+            const treeGroup = new THREE.Group();
+            
+            // 나무 줄기 - 더 자연스러운 형태
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 4, 12);
+            const trunkCanvas = document.createElement('canvas');
+            trunkCanvas.width = 256;
+            trunkCanvas.height = 256;
+            const trunkCtx = trunkCanvas.getContext('2d');
+            
+            // 나무 껍질 텍스처
+            trunkCtx.fillStyle = '#8B4513';
+            trunkCtx.fillRect(0, 0, 256, 256);
+            for (let i = 0; i < 50; i++) {
+                trunkCtx.strokeStyle = `rgba(101, 67, 33, ${Math.random() * 0.5})`;
+                trunkCtx.lineWidth = Math.random() * 3 + 1;
+                trunkCtx.beginPath();
+                trunkCtx.moveTo(Math.random() * 256, 0);
+                trunkCtx.lineTo(Math.random() * 256, 256);
+                trunkCtx.stroke();
+            }
+            
+            const trunkTexture = new THREE.CanvasTexture(trunkCanvas);
+            const trunk = new THREE.Mesh(trunkGeometry, new THREE.MeshPhongMaterial({ map: trunkTexture }));
+            trunk.position.y = 2;
+            trunk.castShadow = true;
+            treeGroup.add(trunk);
+            
+            // 나뭇잎 - 여러 층으로 구성
+            const leafColors = [0x228B22, 0x32CD32, 0x006400];
+            for (let i = 0; i < 3; i++) {
+                const leaves = new THREE.Mesh(
+                    new THREE.SphereGeometry(2 - i * 0.3, 16, 16),
+                    new THREE.MeshPhongMaterial({ 
+                        color: leafColors[i],
+                        shininess: 30
+                    })
+                );
+                leaves.position.y = 5 + i * 0.5;
+                leaves.scale.set(1 + Math.random() * 0.2, 1 + Math.random() * 0.2, 1 + Math.random() * 0.2);
+                leaves.castShadow = true;
+                treeGroup.add(leaves);
+            }
+            
+            return treeGroup;
+        }
+        
+        function createCat() {
+            const catGroup = new THREE.Group();
+            catGroup.rotation.y = Math.PI;
+            
+            // 고양이 몸통 - 털 질감 추가
+            const bodyGeometry = new THREE.SphereGeometry(1.2, 24, 24);
+            const bodyCanvas = document.createElement('canvas');
+            bodyCanvas.width = 512;
+            bodyCanvas.height = 512;
+            const bodyCtx = bodyCanvas.getContext('2d');
+            
+            // 고양이 털 그라데이션
+            const furGradient = bodyCtx.createRadialGradient(256, 256, 0, 256, 256, 256);
+            furGradient.addColorStop(0, '#FFB366');
+            furGradient.addColorStop(0.5, '#FFA500');
+            furGradient.addColorStop(1, '#FF8C00');
+            bodyCtx.fillStyle = furGradient;
+            bodyCtx.fillRect(0, 0, 512, 512);
+            
+            // 털 패턴
+            for (let i = 0; i < 200; i++) {
+                bodyCtx.strokeStyle = `rgba(255, 140, 0, ${Math.random() * 0.3})`;
+                bodyCtx.lineWidth = 1;
+                bodyCtx.beginPath();
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                bodyCtx.moveTo(x, y);
+                bodyCtx.lineTo(x + Math.random() * 10 - 5, y + Math.random() * 10 - 5);
+                bodyCtx.stroke();
+            }
+            
+            const bodyTexture = new THREE.CanvasTexture(bodyCanvas);
+            const body = new THREE.Mesh(bodyGeometry, new THREE.MeshPhongMaterial({ 
+                map: bodyTexture,
+                shininess: 50
+            }));
+            body.scale.set(1, 0.8, 1.2);
+            body.castShadow = true;
+            catGroup.add(body);
+            
+            // 고양이 머리 - 더 디테일한 형태
+            const headGeometry = new THREE.SphereGeometry(0.9, 24, 24);
+            const head = new THREE.Mesh(headGeometry, new THREE.MeshPhongMaterial({ 
+                map: bodyTexture,
+                shininess: 50
+            }));
+            head.position.set(0, 1.2, 0.6);
+            head.castShadow = true;
+            catGroup.add(head);
+            
+            // 귀 - 더 자연스러운 형태
+            const earMaterial = new THREE.MeshPhongMaterial({ color: 0xFF8C00 });
+            const leftEar = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 8), earMaterial);
+            leftEar.position.set(-0.45, 2.0, 0.75);
+            leftEar.rotation.z = -0.2;
+            leftEar.castShadow = true;
+            catGroup.add(leftEar);
+            
+            const rightEar = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 8), earMaterial);
+            rightEar.position.set(0.45, 2.0, 0.75);
+            rightEar.rotation.z = 0.2;
+            rightEar.castShadow = true;
+            catGroup.add(rightEar);
+            
+            // 귀 안쪽
+            const innerEarMaterial = new THREE.MeshPhongMaterial({ color: 0xFFB6C1 });
+            const leftInnerEar = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 8), innerEarMaterial);
+            leftInnerEar.position.set(-0.45, 1.95, 0.85);
+            leftInnerEar.rotation.z = -0.2;
+            catGroup.add(leftInnerEar);
+            
+            const rightInnerEar = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 8), innerEarMaterial);
+            rightInnerEar.position.set(0.45, 1.95, 0.85);
+            rightInnerEar.rotation.z = 0.2;
+            catGroup.add(rightInnerEar);
+            
+            // 눈 - 더 생동감 있게
+            const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000, shininess: 100 });
+            const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), eyeMaterial);
+            leftEye.position.set(-0.3, 1.35, 1.05);
+            catGroup.add(leftEye);
+            const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), eyeMaterial);
+            rightEye.position.set(0.3, 1.35, 1.05);
+            catGroup.add(rightEye);
+            
+            // 눈동자 하이라이트
+            const eyeHighlight = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+            const leftHighlight = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), eyeHighlight);
+            leftHighlight.position.set(-0.32, 1.38, 1.18);
+            catGroup.add(leftHighlight);
+            const rightHighlight = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), eyeHighlight);
+            rightHighlight.position.set(0.28, 1.38, 1.18);
+            catGroup.add(rightHighlight);
+            
+            // 코
+            const nose = new THREE.Mesh(
+                new THREE.SphereGeometry(0.08, 8, 8),
+                new THREE.MeshPhongMaterial({ color: 0xFF69B4 })
+            );
+            nose.position.set(0, 1.2, 1.15);
+            catGroup.add(nose);
+            
+            // 수염
+            const whiskerMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+            for (let i = 0; i < 6; i++) {
+                const whiskerGeometry = new THREE.BufferGeometry();
+                const whiskerPoints = [];
+                const side = i < 3 ? -1 : 1;
+                const angle = (i % 3) * 0.2 - 0.2;
+                
+                whiskerPoints.push(new THREE.Vector3(side * 0.15, 1.15, 1.1));
+                whiskerPoints.push(new THREE.Vector3(side * 0.8, 1.15 + angle, 1.1));
+                
+                whiskerGeometry.setFromPoints(whiskerPoints);
+                const whisker = new THREE.Line(whiskerGeometry, whiskerMaterial);
+                catWhiskers.push(whisker);
+                catGroup.add(whisker);
+            }
+            
+            // 다리 - 더 자연스러운 형태
+            const legMaterial = new THREE.MeshPhongMaterial({ map: bodyTexture });
+            const legGeometry = new THREE.CylinderGeometry(0.25, 0.2, 1.2, 12);
+            for (let i = 0; i < 4; i++) {
+                const leg = new THREE.Mesh(legGeometry, legMaterial);
+                const x = (i % 2) * 1.2 - 0.6;
+                const z = Math.floor(i / 2) * 0.9 - 0.45;
+                leg.position.set(x, -0.6, z);
+                leg.castShadow = true;
+                catGroup.add(leg);
+                
+                // 발
+                const paw = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.25, 8, 8),
+                    new THREE.MeshPhongMaterial({ color: 0xFF69B4 })
+                );
+                paw.position.set(x, -1.2, z);
+                paw.scale.set(1, 0.5, 1.2);
+                catGroup.add(paw);
+            }
+            
+            // 꼬리
+            const tailGeometry = new THREE.CylinderGeometry(0.15, 0.05, 2, 8);
+            catTail = new THREE.Mesh(tailGeometry, new THREE.MeshPhongMaterial({ map: bodyTexture }));
+            catTail.position.set(0, 0.5, -1);
+            catTail.rotation.z = -Math.PI / 4;
+            catTail.castShadow = true;
+            catGroup.add(catTail);
+            
+            catGroup.scale.set(INITIAL_CAT_SCALE, INITIAL_CAT_SCALE, INITIAL_CAT_SCALE);
+            catGroup.position.set(0, 1.5, 0);
+            cat = catGroup;
+            scene.add(cat);
+            createQuestionAboveCat(cat);
+        }
+
+        function createQuestionAboveCat(parent) {
+             questionCanvas = document.createElement('canvas');
+             questionCanvas.width = 1024;
+             questionCanvas.height = 256;
+             questionContext = questionCanvas.getContext('2d');
+             const texture = new THREE.CanvasTexture(questionCanvas);
+             const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+             const geometry = new THREE.PlaneGeometry(10, 2.5); 
+             questionText = new THREE.Mesh(geometry, material);
+             questionText.position.set(0, 6.5, 0); 
+             questionText.rotation.y = Math.PI;
+             parent.add(questionText);
+        }
+        
+        function createAnswerObjects() {
+            for (let i = 0; i < 10; i++) {
+                const answerGroup = new THREE.Group();
+                for (let j = 0; j < 3; j++) {
+                    const answer = createAnswerObject();
+                    answer.position.set((j - 1) * LANE_WIDTH, 1.5, -problemPositions[i]);
+                    answer.userData = { isAnswer: true, problemIndex: i, value: 0, isCorrect: false };
+                    answerGroup.add(answer);
+                }
+                answerGroup.visible = false;
+                world.add(answerGroup);
+                answerGroups.push(answerGroup);
+            }
+        }
+        
+        function createAnswerObject() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+            const numberSprite = new THREE.Sprite(spriteMaterial);
+            numberSprite.scale.set(3, 3, 1);
+            return numberSprite;
+        }
+
+        function selectOperation(operation) {
+             selectedOperation = operation;
+             document.querySelectorAll('.operation-button').forEach(btn => btn.classList.remove('selected'));
+             event.target.classList.add('selected');
+        }
+
+        async function startGameWithOperation() {
+            document.getElementById('operationMenu').style.display = 'none';
+            document.getElementById('instruction').style.display = 'block';
+            document.getElementById('ui').style.display = 'block';
+            
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+
+            if (!isAudioReady) {
+                initAudio();
+            }
+
+            if (isAudioReady && Tone.Transport.state !== 'started' && isBGMEnabled) {
+                Tone.Transport.start();
+            }
+
+            startGame();
+        }
+
+        function startGame() {
+            if (!gameInitialized) return;
+            gameStarted = true;
+            speedMultiplier = 1; 
+            document.getElementById('speedText').textContent = '🚶‍♀️ 속도: x1';
+            if(isAudioReady && isBGMEnabled) Tone.Transport.bpm.value = 100;
+            document.querySelector('.mobile-controls').style.display = 'flex';
+            generateProblems();
+            presentProblem(0);
+        }
+        
+        function generateProblems() {
+            problems = [];
+            for (let i = 0; i < 10; i++) {
+                let problem, operation = selectedOperation;
+                if(operation === 'mixed') {
+                    const ops = ['addition', 'subtraction', 'multiplication', 'division'];
+                    operation = ops[Math.floor(Math.random() * ops.length)];
+                }
+                let num1, num2, answer;
+                switch(operation) {
+                     case 'addition':
+                        num1 = Math.floor(Math.random() * 20) + 1; num2 = Math.floor(Math.random() * 20) + 1;
+                        answer = num1 + num2; problem = { q: `${num1} + ${num2} = ?`, a: answer }; break;
+                     case 'subtraction':
+                        num1 = Math.floor(Math.random() * 20) + 10; num2 = Math.floor(Math.random() * (num1 -1)) + 1;
+                        answer = num1 - num2; problem = { q: `${num1} - ${num2} = ?`, a: answer }; break;
+                     case 'multiplication':
+                        num1 = Math.floor(Math.random() * 9) + 2; num2 = Math.floor(Math.random() * 9) + 2;
+                        answer = num1 * num2; problem = { q: `${num1} × ${num2} = ?`, a: answer }; break;
+                     case 'division':
+                        const divisor = Math.floor(Math.random() * 8) + 2; const quotient = Math.floor(Math.random() * 9) + 2;
+                        const dividend = divisor * quotient; problem = { q: `${dividend} ÷ ${divisor} = ?`, a: quotient }; break;
+                }
+                problem.choices = generateChoices(problem.a);
+                problem.answered = false;
+                problems.push(problem);
+            }
+        }
+        
+        function generateChoices(correct) {
+            const choices = [correct];
+            while (choices.length < 3) {
+                let wrong = correct + (Math.floor(Math.random() * 10) - 5);
+                if (wrong > 0 && !choices.includes(wrong) && wrong !== correct) {
+                    choices.push(wrong);
+                }
+            }
+            return choices.sort(() => Math.random() - 0.5);
+        }
+        
+        function presentProblem(problemIndex) {
+            if (problemIndex >= problems.length) return;
+            const problem = problems[problemIndex];
+            updateQuestionText(problem.q);
+            questionText.visible = true;
+
+            const answerGroup = answerGroups[problemIndex];
+            answerGroup.visible = true;
+            answerGroup.children.forEach((answer, index) => {
+                const choice = problem.choices[index];
+                const color = answerColors[index % answerColors.length];
+                updateAnswerText(answer, choice.toString(), color);
+                answer.userData.value = choice;
+                answer.userData.isCorrect = (choice === problem.a);
+                answer.visible = true;
+            });
+        }
+        
+        function updateQuestionText(text) {
+             if (!questionText) return;
+             questionContext.clearRect(0, 0, questionCanvas.width, questionCanvas.height);
+             
+             // 배경
+             questionContext.fillStyle = 'rgba(255, 255, 255, 0.9)';
+             questionContext.fillRect(0, 0, questionCanvas.width, questionCanvas.height);
+             
+             // 테두리
+             questionContext.strokeStyle = '#333';
+             questionContext.lineWidth = 4;
+             questionContext.strokeRect(10, 10, questionCanvas.width - 20, questionCanvas.height - 20);
+             
+             // 텍스트
+             questionContext.font = 'bold 120px Arial';
+             questionContext.fillStyle = 'black';
+             questionContext.textAlign = 'center';
+             questionContext.textBaseline = 'middle';
+             questionContext.fillText(text, questionCanvas.width/2, questionCanvas.height/2+16);
+             questionText.material.map.needsUpdate = true;
+        }
+
+        function updateAnswerText(answerSprite, text, color) {
+            const canvas = answerSprite.material.map.image;
+            const context = canvas.getContext('2d');
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 원형 배경
+            context.beginPath();
+            context.arc(canvas.width/2, canvas.height/2, 100, 0, Math.PI * 2);
+            context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            context.fill();
+            context.strokeStyle = color;
+            context.lineWidth = 8;
+            context.stroke();
+            
+            // 텍스트
+            context.font = 'bold 140px Arial';
+            context.fillStyle = color;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            context.shadowBlur = 8;
+            context.shadowOffsetX = 3;
+            context.shadowOffsetY = 3;
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            answerSprite.material.map.needsUpdate = true;
+        }
+        
+        function checkGameState() {
+            if (currentProblem >= problems.length || problems[currentProblem].answered) return;
+            
+            const catPos = new THREE.Vector3();
+            cat.getWorldPosition(catPos);
+            
+            const answerGroup = answerGroups[currentProblem];
+            if (!answerGroup.visible || !answerGroup.children.length) return;
+
+            for (const answer of answerGroup.children) {
+                if (!answer.visible) continue;
+                
+                const answerPos = new THREE.Vector3();
+                answer.getWorldPosition(answerPos);
+                
+                if (catPos.distanceTo(answerPos) < 1.5) {
+                    processAnswer(true, answer);
+                    return;
+                }
+            }
+
+            const firstAnswerPos = new THREE.Vector3();
+            answerGroup.children[0].getWorldPosition(firstAnswerPos);
+
+            if (firstAnswerPos.z > cat.position.z) {
+                processAnswer(false, null);
+            }
+        }
+
+        function processAnswer(collided, selectedAnswer = null) {
+            const problem = problems[currentProblem];
+            if (problem.answered) return;
+            
+            const answerGroup = answerGroups[currentProblem];
+            
+            problem.answered = true;
+
+            const isCorrect = collided && selectedAnswer.userData.isCorrect;
+            
+            const interactionZ = selectedAnswer ? selectedAnswer.position.z : answerGroup.children[0].position.z;
+
+            if (isCorrect) {
+                score += 10 * speedMultiplier;
+                currentCatAbsoluteScale += (INITIAL_CAT_SCALE * 2) / 10;
+                createAnswerEffect(true);
+                if (isAudioReady && isSFXEnabled) correctSound.triggerAttackRelease("C5", "8n");
+                showFeedback(true, cat.position.x, interactionZ);
+            } else {
+                currentCatAbsoluteScale -= INITIAL_CAT_SCALE / 10;
+                currentCatAbsoluteScale = Math.max(INITIAL_CAT_SCALE * 0.5, currentCatAbsoluteScale);
+                createAnswerEffect(false);
+                if (isAudioReady && isSFXEnabled) wrongSound.triggerAttackRelease("C3", "4n");
+                const feedbackText = collided ? "오답! 으악!" : "놓쳤다! 아쉽..";
+                showFeedback(false, cat.position.x, interactionZ, feedbackText);
+            }
+            
+            cat.scale.set(currentCatAbsoluteScale, currentCatAbsoluteScale, currentCatAbsoluteScale);
+            
+            const currentSizePercentage = Math.round(currentCatAbsoluteScale / INITIAL_CAT_SCALE * 100);
+            document.getElementById('score').textContent = score;
+            document.getElementById('catSize').textContent = `${currentSizePercentage}%`;
+            questionText.visible = false;
+            
+            const delay = Math.max(300, 1500 / speedMultiplier);
+
+            setTimeout(() => {
+                answerGroup.visible = false;
+                currentProblem++;
+                document.getElementById('problemCount').textContent = Math.min(10, currentProblem + 1);
+                if (currentProblem >= 10) {
+                    endGame();
+                } else {
+                    presentProblem(currentProblem);
+                }
+            }, delay);
+        }
+        
+        function createAnswerEffect(isCorrect) {
+            const color = isCorrect ? new THREE.Color(0x50ff50) : new THREE.Color(0xff5050);
+            const particleCount = isCorrect ? 100 : 30;
+            const pMaterial = new THREE.PointsMaterial({
+                color: color,
+                size: isCorrect ? 0.5 : 0.7,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                depthTest: false,
+            });
+
+            const particles = new THREE.BufferGeometry();
+            const p_vertices = [];
+            for (let i = 0; i < particleCount; i++) {
+                p_vertices.push(cat.position.x, cat.position.y, cat.position.z);
+            }
+            particles.setAttribute('position', new THREE.Float32BufferAttribute(p_vertices, 3));
+            
+            const particleSystem = new THREE.Points(particles, pMaterial);
+            particleSystem.userData.velocities = [];
+            particleSystem.userData.lifespan = 1.5;
+
+            for (let i = 0; i < particleCount; i++) {
+                 const v = new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                 );
+                 particleSystem.userData.velocities.push(v);
+            }
+            scene.add(particleSystem);
+            activeParticles.push(particleSystem);
+        }
+
+        function showFeedback(isCorrect, x, z, customText = null) {
+            const text = customText || (isCorrect ? '정답! 쑥쑥!' : '앗! 작아진다..');
+            const color = isCorrect ? 0x00dd00 : 0xff4444;
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 128;
+            const context = canvas.getContext('2d');
+            
+            // 배경
+            context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            context.fillRect(0, 0, 512, 128);
+            
+            // 텍스트
+            context.font = 'bold 80px Arial';
+            context.fillStyle = `rgba(${ (color >> 16) & 255 }, ${ (color >> 8) & 255 }, ${ color & 255 }, 1)`;
+            context.textAlign = 'center';
+            context.fillText(text, 256, 96);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const geometry = new THREE.PlaneGeometry(8, 2);
+            const feedbackMesh = new THREE.Mesh(geometry, material);
+            feedbackMesh.position.set(x, 6, z);
+            world.add(feedbackMesh);
+            
+            let startTime = Date.now();
+            function animateFeedback() {
+                let elapsed = (Date.now() - startTime) / 1000;
+                if (elapsed < 1.5) {
+                    feedbackMesh.position.y += 0.05;
+                    feedbackMesh.material.opacity = 1 - (elapsed / 1.5);
+                    requestAnimationFrame(animateFeedback);
+                } else {
+                    world.remove(feedbackMesh);
+                }
+            }
+            animateFeedback();
+        }
+
+        function endGame() {
+            gameStarted = false;
+            document.getElementById('finalScore').textContent = score;
+            const finalSize = Math.round(currentCatAbsoluteScale / INITIAL_CAT_SCALE * 100);
+            document.getElementById('finalCatSize').textContent = `${finalSize}%`;
+            document.getElementById('gameComplete').style.display = 'block';
+            document.getElementById('instruction').style.display = 'none';
+            document.querySelector('.mobile-controls').style.display = 'none';
+            if(isAudioReady && Tone.Transport.state === 'started') Tone.Transport.stop();
+        }
+
+        function restartGame() {
+            roadSections.forEach((section, i) => {
+                const zPos = i * ROAD_SECTION_LENGTH - (NUM_ROAD_SECTIONS / 2 * ROAD_SECTION_LENGTH);
+                section.position.z = zPos;
+            });
+            trees.forEach(tree => {
+                const side = Math.random() > 0.5 ? 1 : -1;
+                tree.position.set(side * (8 + Math.random() * 15), 0, -Math.random() * RECYCLE_DEPTH);
+            });
+
+            currentProblem = 0; score = 0;
+            catTargetX = 0;
+            currentCatAbsoluteScale = INITIAL_CAT_SCALE;
+            if(cat) {
+              cat.position.set(0, 1.5, 0);
+              cat.scale.set(INITIAL_CAT_SCALE, INITIAL_CAT_SCALE, INITIAL_CAT_SCALE);
+            }
+            if(questionText){
+              questionText.scale.set(1, 1, 1);
+            }
+            if(camera) {
+              camera.position.set(0, 5, 12);
+              camera.lookAt(0, 1.5, 0);
+            }
+            if(world) {
+              world.position.set(0, 0, 0);
+            }
+            document.getElementById('ui').style.display = 'none';
+            document.getElementById('score').textContent = '0';
+            document.getElementById('problemCount').textContent = '1';
+            document.getElementById('catSize').textContent = '100%';
+            document.getElementById('gameComplete').style.display = 'none';
+            document.getElementById('operationMenu').style.display = 'block';
+            answerGroups.forEach(g => g.visible = false);
+            gameStarted = false;
+            if(isAudioReady && Tone.Transport.state === 'started') {
+                 Tone.Transport.stop();
+                 bgmSequence.stop();
+            }
+        }
+
+        function toggleSpeed() {
+             const speedText = document.getElementById('speedText');
+             if (speedMultiplier === 1) { 
+                 speedMultiplier = 2; 
+                 if(isAudioReady && isBGMEnabled) Tone.Transport.bpm.value = 120;
+                 speedText.textContent = '🏃‍♂️ 속도: x2'; 
+            } else if (speedMultiplier === 2) { 
+                speedMultiplier = 4; 
+                if(isAudioReady && isBGMEnabled) Tone.Transport.bpm.value = 150;
+                speedText.textContent = '🚀 속도: x4'; 
+            } else { 
+                speedMultiplier = 1; 
+                if(isAudioReady && isBGMEnabled) Tone.Transport.bpm.value = 100;
+                speedText.textContent = '🚶‍♀️ 속도: x1'; 
+            }
+        }
+
+        function recycleEnvironment() {
+            const recyclingPointZ = camera.position.z + 20;
+            const totalRoadLength = NUM_ROAD_SECTIONS * ROAD_SECTION_LENGTH;
+            roadSections.forEach(section => {
+                const sectionWorldPos = new THREE.Vector3();
+                section.getWorldPosition(sectionWorldPos);
+                if (sectionWorldPos.z > recyclingPointZ) {
+                    section.position.z -= totalRoadLength;
+                }
+            });
+            trees.forEach(tree => {
+                const treeWorldPos = new THREE.Vector3();
+                tree.getWorldPosition(treeWorldPos);
+                if (treeWorldPos.z > recyclingPointZ) {
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    tree.position.x = side * (8 + Math.random() * 15);
+                    tree.position.z -= RECYCLE_DEPTH;
+                }
+            });
+        }
+        
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if (gameStarted && cat) {
+                const moveZ = walkingSpeed * speedMultiplier;
+                world.position.z += moveZ;
+                cat.position.x += (catTargetX - cat.position.x) * 0.1;
+                cat.position.y = 1.5 + Math.sin(world.position.z * -2.5) * 0.1;
+                
+                // 꼬리 애니메이션
+                if (catTail) {
+                    catTail.rotation.z = -Math.PI / 4 + Math.sin(time * 3) * 0.2;
+                }
+                
+                // 수염 애니메이션
+                catWhiskers.forEach((whisker, i) => {
+                    whisker.rotation.z = Math.sin(time * 2 + i) * 0.05;
+                });
+                
+                checkGameState();
+                recycleEnvironment();
+            }
+            
+            // 구름 애니메이션
+            clouds.forEach((cloud, i) => {
+                cloud.position.x += Math.sin(time * 0.1 + i) * 0.05;
+                cloud.position.y += Math.cos(time * 0.15 + i) * 0.03;
+            });
+            
+            // 나비 애니메이션
+            butterflies.forEach((butterfly, i) => {
+                const userData = butterfly.userData;
+                butterfly.position.x += Math.sin(time * userData.speed) * 0.2;
+                butterfly.position.y = userData.baseY + Math.sin(time * 2) * 0.5;
+                butterfly.position.z += Math.cos(time * userData.speed) * 0.1;
+                
+                // 날개 펄럭임
+                butterfly.children[0].rotation.y = -Math.PI / 6 + Math.sin(time * 10) * 0.3;
+                butterfly.children[1].rotation.y = Math.PI / 6 - Math.sin(time * 10) * 0.3;
+                
+                // 범위 제한
+                if (Math.abs(butterfly.position.x) > userData.range) {
+                    butterfly.position.x = -butterfly.position.x;
+                }
+                if (Math.abs(butterfly.position.z) > userData.range) {
+                    butterfly.position.z = -butterfly.position.z;
+                }
+            });
+            
+            // 주변 파티클 애니메이션
+            ambientParticles.forEach(particles => {
+                particles.rotation.y += 0.0005;
+                const positions = particles.geometry.attributes.position;
+                for (let i = 0; i < positions.count; i++) {
+                    const y = positions.getY(i);
+                    positions.setY(i, y + Math.sin(time + i) * 0.01);
+                }
+                positions.needsUpdate = true;
+            });
+            
+            // 활성 파티클 애니메이션
+            activeParticles.forEach((ps, i) => {
+                ps.userData.lifespan -= delta;
+                ps.material.opacity = ps.userData.lifespan;
+                const positions = ps.geometry.attributes.position;
+                for(let j=0; j < positions.count; j++) {
+                    positions.setX(j, positions.getX(j) + ps.userData.velocities[j].x * delta);
+                    positions.setY(j, positions.getY(j) + ps.userData.velocities[j].y * delta);
+                    positions.setZ(j, positions.getZ(j) + ps.userData.velocities[j].z * delta);
+                }
+                positions.needsUpdate = true;
+                if(ps.userData.lifespan <= 0) {
+                    scene.remove(ps);
+                    activeParticles.splice(i, 1);
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        window.onload = function() {
+            initGame();
+        }
+    </script>
+</body>
+</html>
